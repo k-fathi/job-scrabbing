@@ -26,7 +26,7 @@ except ImportError:
 
 st.set_page_config(page_title="LinkedIn Jobs Scraper", page_icon="💼", layout="centered")
 
-st.title("💼 LinkedIn Jobs Scraper - النسخة الوحش")
+st.title("💼 LinkedIn Jobs Scraper")
 st.write("اكتب اسم الوظيفة، واختار الفلاتر اللي على مزاجك، وارفع الـ CV لو حابب (PDF/Word أو لينك درايف)، ودوس بحث.")
 
 USER_AGENTS = [
@@ -120,15 +120,64 @@ most other some such no nor not only own same so than too very s t can will just
 don should now this that these those i you he she it we they our your their
 """.split())
 
-# قاموس مهارات تقنية أساسي، ممكن توسّعه حسب مجالك (مثلاً DevOps/backend/data)
+# قاموس مهارات/تكنولوجيز موسّع - يغطي مجالات متعددة (Dev, DevOps, Data, Mobile, ...)
+# كل ما زودت الكلمات دي كل ما المطابقة بقت أدق للمهارات التقنية تحديدًا
 TECH_SKILLS = {
-    "python", "java", "javascript", "typescript", "react", "angular", "vue",
-    "docker", "kubernetes", "k8s", "aws", "azure", "gcp", "linux", "sql",
-    "nosql", "mongodb", "postgresql", "mysql", "git", "github", "gitlab",
-    "jenkins", "ansible", "terraform", "devops", "ci", "cd", "node", "nodejs",
-    "django", "flask", "fastapi", "spring", "html", "css", "rest", "api",
-    "microservices", "grafana", "prometheus", "helm", "nginx", "redis",
-    "bash", "shell", "networking", "security", "agile", "scrum",
+    # Programming languages
+    "python", "java", "javascript", "typescript", "cpp", "csharp", "php",
+    "ruby", "go", "golang", "rust", "kotlin", "swift", "scala", "perl",
+    "matlab", "dart", "objective", "vba", "sql", "nosql", "bash", "shell",
+    "powershell", "assembly", "solidity",
+
+    # Frontend
+    "html", "css", "sass", "scss", "less", "react", "reactjs", "angular",
+    "vue", "vuejs", "nextjs", "nuxt", "svelte", "jquery", "bootstrap",
+    "tailwind", "webpack", "vite", "babel", "redux", "graphql",
+
+    # Backend / frameworks
+    "node", "nodejs", "express", "django", "flask", "fastapi", "spring",
+    "springboot", "laravel", "symfony", "rails", "dotnet", "aspnet", "nestjs",
+    "rest", "restful", "api", "grpc", "soap", "microservices", "websocket",
+
+    # Databases
+    "mysql", "postgresql", "postgres", "mongodb", "redis", "elasticsearch",
+    "cassandra", "dynamodb", "oracle", "sqlite", "mariadb", "firebase",
+    "firestore", "neo4j", "snowflake", "bigquery", "redshift",
+
+    # Cloud
+    "aws", "azure", "gcp", "cloud", "ec2", "s3", "lambda", "cloudfront",
+    "iam", "vpc", "eks", "aks", "gke", "heroku", "digitalocean", "cloudflare",
+
+    # DevOps / infra
+    "docker", "kubernetes", "k8s", "helm", "terraform", "ansible", "puppet",
+    "chef", "jenkins", "gitlab", "github", "bitbucket", "circleci",
+    "travisci", "argocd", "devops", "ci", "cd", "cicd", "linux", "unix",
+    "windows", "nginx", "apache", "haproxy", "grafana", "prometheus",
+    "datadog", "splunk", "elk", "logstash", "kibana", "vagrant",
+    "virtualization", "vmware", "networking", "dns", "tcpip", "loadbalancing",
+    "monitoring", "logging", "sre", "iac", "gitops",
+
+    # Security
+    "security", "cybersecurity", "penetration", "pentest", "firewall", "vpn",
+    "encryption", "oauth", "jwt", "ssl", "tls", "owasp", "siem", "iam",
+    "compliance", "vulnerability",
+
+    # Data / ML
+    "pandas", "numpy", "scikit", "sklearn", "tensorflow", "pytorch", "keras",
+    "machine", "learning", "deep", "nlp", "opencv", "spark", "hadoop",
+    "kafka", "airflow", "etl", "tableau", "powerbi", "excel", "statistics",
+    "data", "analytics", "visualization", "ai",
+
+    # Mobile
+    "android", "ios", "flutter", "reactnative", "xamarin", "swiftui",
+
+    # Testing
+    "testing", "selenium", "cypress", "junit", "pytest", "jest", "postman",
+    "qa", "automation", "unittest", "tdd", "bdd",
+
+    # Tools / methodologies
+    "git", "jira", "confluence", "agile", "scrum", "kanban", "trello",
+    "figma", "uiux",
 }
 
 def clean_tokens(text):
