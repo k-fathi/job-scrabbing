@@ -27,7 +27,7 @@ except ImportError:
 st.set_page_config(page_title="LinkedIn Jobs Scraper", page_icon="💼", layout="centered")
 
 st.title("💼 LinkedIn Jobs Scraper")
-st.write("اكتب اسم الوظيفة، واختار الفلاتر اللي على مزاجك، وارفع الـ CV لو حابب (PDF/Word أو لينك درايف)، ودوس بحث.")
+st.write("اكتب اسم الوظيفة، واختار الفلاتر، وارفع السيرة الذاتية لو حابب، ودوس بحث.")
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -37,7 +37,7 @@ USER_AGENTS = [
 ]
 
 # ============================================================
-#   دوال مساعدة لقرأة الـ CV
+#   دوال مساعدة لقرأة السيرة الذاتية
 # ============================================================
 def extract_text_from_pdf(pdf_file):
     text = ""
@@ -71,7 +71,6 @@ def extract_text_from_gdrive(link):
 
     file_id = match.group(1)
 
-    # محاولة 1: الملف Google Doc أصلي (مش رفعت كـ PDF)
     try:
         doc_url = f"https://docs.google.com/document/d/{file_id}/export?format=txt"
         resp = requests.get(doc_url, timeout=10)
@@ -80,9 +79,6 @@ def extract_text_from_gdrive(link):
     except Exception:
         pass
 
-    # محاولة 2: الطريقة الصح لتنزيل ملف مرفوع (PDF/Word) من درايف
-    # uc?export=download المباشر بقى غالبًا بيرجع صفحة تأكيد HTML بدل الملف،
-    # فبنستخدم gdown اللي بيتعامل مع الـ confirm token والـ session تلقائيًا
     if GDOWN_AVAILABLE:
         try:
             tmp_path = f"/tmp/_gdrive_cv_{file_id}"
@@ -92,12 +88,11 @@ def extract_text_from_gdrive(link):
                     raw = f.read()
                 if raw[:4] == b"%PDF":
                     return extract_text_from_pdf(io.BytesIO(raw))
-                elif raw[:2] == b"PK":  # ملف docx (zip signature)
+                elif raw[:2] == b"PK":  
                     return extract_text_from_docx(io.BytesIO(raw))
         except Exception:
             pass
 
-    # محاولة 3 (fallback بدائي لو gdown مش متثبتة أو فشلت)
     try:
         pdf_url = f"https://drive.google.com/uc?export=download&id={file_id}"
         resp = requests.get(pdf_url, timeout=10)
@@ -109,8 +104,7 @@ def extract_text_from_gdrive(link):
     return ""
 
 # ============================================================
-#   مطابقة الـ CV بالوظيفة - TF-IDF + Cosine Similarity
-#   (نفس المبدأ اللي بتشتغل بيه أغلب أنظمة الـ ATS الأساسية)
+#   مطابقة السيرة الذاتية بالوظيفة
 # ============================================================
 STOPWORDS = set("""
 a an the and or but if is are was were be been being to of in on at by for with
@@ -120,64 +114,37 @@ most other some such no nor not only own same so than too very s t can will just
 don should now this that these those i you he she it we they our your their
 """.split())
 
-# قاموس مهارات/تكنولوجيز موسّع - يغطي مجالات متعددة (Dev, DevOps, Data, Mobile, ...)
-# كل ما زودت الكلمات دي كل ما المطابقة بقت أدق للمهارات التقنية تحديدًا
 TECH_SKILLS = {
-    # Programming languages
     "python", "java", "javascript", "typescript", "cpp", "csharp", "php",
     "ruby", "go", "golang", "rust", "kotlin", "swift", "scala", "perl",
     "matlab", "dart", "objective", "vba", "sql", "nosql", "bash", "shell",
-    "powershell", "assembly", "solidity",
-
-    # Frontend
-    "html", "css", "sass", "scss", "less", "react", "reactjs", "angular",
-    "vue", "vuejs", "nextjs", "nuxt", "svelte", "jquery", "bootstrap",
-    "tailwind", "webpack", "vite", "babel", "redux", "graphql",
-
-    # Backend / frameworks
-    "node", "nodejs", "express", "django", "flask", "fastapi", "spring",
-    "springboot", "laravel", "symfony", "rails", "dotnet", "aspnet", "nestjs",
-    "rest", "restful", "api", "grpc", "soap", "microservices", "websocket",
-
-    # Databases
-    "mysql", "postgresql", "postgres", "mongodb", "redis", "elasticsearch",
-    "cassandra", "dynamodb", "oracle", "sqlite", "mariadb", "firebase",
-    "firestore", "neo4j", "snowflake", "bigquery", "redshift",
-
-    # Cloud
+    "powershell", "assembly", "solidity", "html", "css", "sass", "scss", 
+    "less", "react", "reactjs", "angular", "vue", "vuejs", "nextjs", "nuxt", 
+    "svelte", "jquery", "bootstrap", "tailwind", "webpack", "vite", "babel", 
+    "redux", "graphql", "node", "nodejs", "express", "django", "flask", 
+    "fastapi", "spring", "springboot", "laravel", "symfony", "rails", "dotnet", 
+    "aspnet", "nestjs", "rest", "restful", "api", "grpc", "soap", "microservices", 
+    "websocket", "mysql", "postgresql", "postgres", "mongodb", "redis", 
+    "elasticsearch", "cassandra", "dynamodb", "oracle", "sqlite", "mariadb", 
+    "firebase", "firestore", "neo4j", "snowflake", "bigquery", "redshift",
     "aws", "azure", "gcp", "cloud", "ec2", "s3", "lambda", "cloudfront",
     "iam", "vpc", "eks", "aks", "gke", "heroku", "digitalocean", "cloudflare",
-
-    # DevOps / infra
     "docker", "kubernetes", "k8s", "helm", "terraform", "ansible", "puppet",
     "chef", "jenkins", "gitlab", "github", "bitbucket", "circleci",
     "travisci", "argocd", "devops", "ci", "cd", "cicd", "linux", "unix",
     "windows", "nginx", "apache", "haproxy", "grafana", "prometheus",
     "datadog", "splunk", "elk", "logstash", "kibana", "vagrant",
     "virtualization", "vmware", "networking", "dns", "tcpip", "loadbalancing",
-    "monitoring", "logging", "sre", "iac", "gitops",
-
-    # Security
-    "security", "cybersecurity", "penetration", "pentest", "firewall", "vpn",
-    "encryption", "oauth", "jwt", "ssl", "tls", "owasp", "siem", "iam",
-    "compliance", "vulnerability",
-
-    # Data / ML
-    "pandas", "numpy", "scikit", "sklearn", "tensorflow", "pytorch", "keras",
-    "machine", "learning", "deep", "nlp", "opencv", "spark", "hadoop",
-    "kafka", "airflow", "etl", "tableau", "powerbi", "excel", "statistics",
-    "data", "analytics", "visualization", "ai",
-
-    # Mobile
-    "android", "ios", "flutter", "reactnative", "xamarin", "swiftui",
-
-    # Testing
-    "testing", "selenium", "cypress", "junit", "pytest", "jest", "postman",
-    "qa", "automation", "unittest", "tdd", "bdd",
-
-    # Tools / methodologies
-    "git", "jira", "confluence", "agile", "scrum", "kanban", "trello",
-    "figma", "uiux",
+    "monitoring", "logging", "sre", "iac", "gitops", "security", "cybersecurity", 
+    "penetration", "pentest", "firewall", "vpn", "encryption", "oauth", "jwt", 
+    "ssl", "tls", "owasp", "siem", "compliance", "vulnerability", "pandas", 
+    "numpy", "scikit", "sklearn", "tensorflow", "pytorch", "keras", "machine", 
+    "learning", "deep", "nlp", "opencv", "spark", "hadoop", "kafka", "airflow", 
+    "etl", "tableau", "powerbi", "excel", "statistics", "data", "analytics", 
+    "visualization", "ai", "android", "ios", "flutter", "reactnative", "xamarin", 
+    "swiftui", "testing", "selenium", "cypress", "junit", "pytest", "jest", 
+    "postman", "qa", "automation", "unittest", "tdd", "bdd", "git", "jira", 
+    "confluence", "agile", "scrum", "kanban", "trello", "figma", "uiux",
 }
 
 def clean_tokens(text):
@@ -187,16 +154,7 @@ def clean_tokens(text):
     return [t for t in tokens if t not in STOPWORDS]
 
 def calculate_match(cv_text, job_desc):
-    """
-    درجة مطابقة من 0 لـ 100 بين الـ CV ووصف الوظيفة.
-    بتدمج بين:
-    1) TF-IDF Cosine Similarity على مستوى النص كله (بيدي وزن أعلى للكلمات المميزة
-       وبيتجاهل التكرار العشوائي لكلمات عادية)
-    2) نسبة تطابق المهارات التقنية المعروفة (skills overlap) كبونص إضافي
-    ملاحظة: ده تقدير تقريبي زي أي نظام keyword/embedding-based matching، مش بديل
-    100% عن مراجعة بشرية أو ATS متخصص بيستخدم embeddings دلالية.
-    """
-    if not cv_text or not job_desc or job_desc == "N/A":
+    if not cv_text or not job_desc or job_desc == "غير متوفر":
         return 0.0
 
     cv_tokens = clean_tokens(cv_text)
@@ -217,7 +175,6 @@ def calculate_match(cv_text, job_desc):
         except Exception:
             tfidf_score = 0.0
     else:
-        # fallback (Jaccard) لو sklearn مش متاحة
         cv_set, job_set = set(cv_tokens), set(job_tokens)
         union = cv_set | job_set
         tfidf_score = (len(cv_set & job_set) / len(union)) if union else 0.0
@@ -228,79 +185,67 @@ def calculate_match(cv_text, job_desc):
 
     final_score = (0.65 * tfidf_score + 0.35 * skill_score) * 100
     return round(min(final_score, 100.0), 2)
+
 # ============================================================
-#   نموذج الإدخال والفلاتر
+#   الواجهة والفلاتر
 # ============================================================
-st.subheader("📄 رفع السيرة الذاتية (CV)")
-cv_source = st.radio("اختار طريقة رفع الـ CV:", ["ملف (PDF / Word)", "لينك جوجل درايف"])
+st.subheader("📄 رفع السيرة الذاتية")
+cv_source = st.radio("اختار الطريقة:", ["ملف", "لينك جوجل درايف"])
 
 cv_text = ""
-if cv_source == "ملف (PDF / Word)":
+if cv_source == "ملف":
     cv_file = st.file_uploader("ارفع الملف هنا", type=["pdf", "docx"])
     if cv_file:
         if cv_file.name.endswith('.pdf'):
             cv_text = extract_text_from_pdf(cv_file)
         elif cv_file.name.endswith('.docx'):
             cv_text = extract_text_from_docx(cv_file)
-
         if cv_text:
-            st.success("تم قراية ملف الـ CV بنجاح!")
+            st.success("تم قراية الملف بنجاح!")
         else:
-            st.error("حصلت مشكلة ومش قادرين نقرا الكلام من الملف ده.")
+            st.error("مش قادرين نقرا الكلام من الملف ده.")
 else:
-    gdrive_link = st.text_input("حط لينك جوجل درايف هنا (لازم يكون معمول Anyone with the link)")
+    gdrive_link = st.text_input("حط اللينك هنا (لازم يكون مفتوح للكل)")
     if gdrive_link:
         cv_text = extract_text_from_gdrive(gdrive_link)
         if cv_text:
-            st.success("تم قراية الـ CV من درايف بنجاح!")
+            st.success("تم قراية الملف من درايف بنجاح!")
         else:
-            st.error("مش قادرين نوصل للملف. اتأكد إن اللينك صح وصلاحياته مفتوحة للكل.")
+            st.error("مش قادرين نوصل للملف.")
 
 with st.form("search_form"):
-    keywords_input = st.text_input("اسم الوظيفة (لو أكتر من واحدة افصل بفاصلة)", placeholder="Data Analyst, Python Developer")
+    keywords_input = st.text_input("اسم الوظيفة", placeholder="Data Analyst")
     location = st.text_input("المكان", value="Egypt")
 
     col1, col2 = st.columns(2)
     with col1:
-        sort_choices = ["بدون ترتيب", "الوقت (الأحدث)"]
-        if cv_text:
-            sort_choices.append("أعلى نسبة تطابق")
-        sort_option = st.selectbox("ترتيب النتائج بناءً على:", sort_choices)
-        fetch_full_desc = st.checkbox("سحب تفاصيل الوظيفة بالكامل؟", help="بيسحب الوصف لو مش رافع CV. (لو رافع CV هيتسحب إجباري)")
+        time_filter = st.selectbox("وقت النشر", ["أي وقت", "آخر ٢٤ ساعة", "آخر أسبوع", "آخر شهر"])
+        fetch_full_desc = st.checkbox("سحب التفاصيل بالكامل؟", help="ضروري عشان يحسب التطابق لو رافع سيرة ذاتية.")
     with col2:
-        workplace = st.selectbox("نوع الشغل", ["الكل", "عن بُعد (Remote)", "من الشركة (On-site)", "مختلط (Hybrid)"])
+        workplace = st.selectbox("نوع الشغل", ["الكل", "عن بُعد", "من الشركة", "مختلط"])
 
-    pages_per_keyword = st.slider("عدد الصفحات لكل وظيفة (الحد الأقصى 10)", min_value=1, max_value=10, value=4)
-    submitted = st.form_submit_button("ندوس بحث يخويا ؟")
+    pages_per_keyword = st.slider("عدد الصفحات", min_value=1, max_value=10, value=4)
+    submitted = st.form_submit_button("ابحث يا وحش")
 
 # ============================================================
-#   دوال السكرابنج
+#   دوال السحب
 # ============================================================
 def extract_job_id(job_link):
-    # الروابط بتاعة LinkedIn عادة بتخلص بـ رقم ID، بنمسكه بـ regex بدل split هش
     match = re.search(r'-(\d+)(?:[/?]|$)', job_link)
     if match:
         return match.group(1)
     return job_link.rstrip("/").split("/")[-1]
 
-WORKPLACE_LABELS = {
-    "remote": "عن بُعد (Remote)",
-    "telecommute": "عن بُعد (Remote)",
-    "work from home": "عن بُعد (Remote)",
-    "hybrid": "مختلط (Hybrid)",
-    "on-site": "من الشركة (On-site)",
-    "onsite": "من الشركة (On-site)",
-    "on site": "من الشركة (On-site)",
-}
+def detect_workplace_type(soup, title, description, location_text):
+    haystack = f"{title or ''} {(description or '')[:500]} {location_text or ''}".lower()
+    
+    if "remote" in haystack or "عن بعد" in haystack:
+        return "عن بُعد"
+    if "hybrid" in haystack or "مختلط" in haystack:
+        return "مختلط"
+    if "on-site" in haystack or "onsite" in haystack or "من الشركة" in haystack:
+        return "من الشركة"
 
-def detect_workplace_type(soup, title, description):
-    """
-    بيحاول يكتشف نوع الشغل (Remote/Hybrid/On-site) الحقيقي للوظيفة، بترتيب أولوية:
-    1) من الـ criteria list في صفحة تفاصيل الوظيفة نفسها (لو فيها حقل Workplace type)
-    2) من كلمات مفتاحية في العنوان أو الوصف
-    يرجع "غير محدد" لو مقدرش يحدد حاجة.
-    """
-    # 1) الـ criteria list في صفحة الوظيفة (لو موجودة)
     if soup:
         for item in soup.find_all("li", class_="description__job-criteria-item"):
             header = item.find("h3")
@@ -308,16 +253,10 @@ def detect_workplace_type(soup, title, description):
             if header and value:
                 header_txt = header.get_text(strip=True).lower()
                 value_txt = value.get_text(strip=True).lower()
-                if "workplace" in header_txt or "location type" in header_txt:
-                    for key, label in WORKPLACE_LABELS.items():
-                        if key in value_txt:
-                            return label
-
-    # 2) fallback: كلمات مفتاحية في العنوان + أول جزء من الوصف
-    haystack = f"{title or ''} {(description or '')[:500]}".lower()
-    for key, label in WORKPLACE_LABELS.items():
-        if key in haystack:
-            return label
+                if "workplace" in header_txt or "location" in header_txt:
+                    if "remote" in value_txt: return "عن بُعد"
+                    if "hybrid" in value_txt: return "مختلط"
+                    if "on-site" in value_txt or "onsite" in value_txt: return "من الشركة"
 
     return "غير محدد"
 
@@ -328,31 +267,30 @@ def get_job_description(job_id, headers):
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.content, "html.parser")
             div = soup.find("div", class_="show-more-less-html__markup")
-            description = div.get_text(separator="\n", strip=True) if div else "N/A"
+            description = div.get_text(separator="\n", strip=True) if div else "غير متوفر"
             return description, soup
     except Exception:
         pass
-    return "N/A", None
+    return "غير متوفر", None
 
-def scrape_linkedin_jobs(keywords, location, pages_per_keyword, sort_option, workplace, fetch_full_desc, cv_text, progress_callback):
+def scrape_linkedin_jobs(keywords, location, pages_per_keyword, workplace, time_filter, fetch_full_desc, cv_text, progress_callback):
     all_jobs = []
     seen_job_ids = set()
 
-    wt_map = {"عن بُعد (Remote)": "2", "من الشركة (On-site)": "1", "مختلط (Hybrid)": "3"}
+    wt_map = {"عن بُعد": "2", "من الشركة": "1", "مختلط": "3"}
+    time_map = {"آخر ٢٤ ساعة": "r86400", "آخر أسبوع": "r604800", "آخر شهر": "r2592000"}
+    
     base_url = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
-
     total_steps = len(keywords) * pages_per_keyword
     step = 0
 
-    # بنسحب تفاصيل الوظيفة لو: فيه CV (لحساب التطابق)، أو المستخدم طلب التفاصيل صراحة،
-    # أو الفلتر "الكل" وعايزين نكتشف نوع الشغل الحقيقي لكل وظيفة على حدة
     force_fetch_desc = True if (cv_text or workplace == "الكل") else fetch_full_desc
 
     for keyword in keywords:
         for page in range(pages_per_keyword):
             step += 1
             if progress_callback:
-                progress_callback(step / total_steps, f"بيدور على '{keyword}' - صفحة {page + 1}/{pages_per_keyword}")
+                progress_callback(step / total_steps, f"بنسحب '{keyword}' - صفحة {page + 1}/{pages_per_keyword}")
 
             start = page * 25
             params = {
@@ -360,8 +298,10 @@ def scrape_linkedin_jobs(keywords, location, pages_per_keyword, sort_option, wor
                 "location": location,
                 "start": start,
             }
-            if sort_option == "الوقت (الأحدث)":
-                params["sortBy"] = "DD"
+            
+            if time_filter != "أي وقت":
+                params["f_TPR"] = time_map[time_filter]
+                
             if workplace != "الكل":
                 params["f_WT"] = wt_map[workplace]
 
@@ -374,14 +314,11 @@ def scrape_linkedin_jobs(keywords, location, pages_per_keyword, sort_option, wor
                 }
                 try:
                     response = requests.get(base_url, headers=headers, params=params, timeout=10)
-                    # لو اتحظرنا أو رجّعنا لصفحة تسجيل الدخول، status ممكن يكون 200 برضه
                     if response.status_code == 200 and "authwall" not in response.url:
                         soup = BeautifulSoup(response.content, "html.parser")
                         job_cards = soup.find_all("li")
-                        if job_cards:
-                            break
+                        if job_cards: break
                     elif response.status_code == 429:
-                        # rate limited - انتظار أطول (exponential backoff)
                         time.sleep((2 ** attempt) + random.uniform(1, 2))
                         continue
                     time.sleep(random.uniform(2.0, 4.0))
@@ -393,27 +330,27 @@ def scrape_linkedin_jobs(keywords, location, pages_per_keyword, sort_option, wor
 
             for card in job_cards:
                 link_elem = card.find("a", class_="base-card__full-link")
-                if not link_elem:
-                    continue
+                if not link_elem: continue
 
                 job_link = link_elem["href"].split("?")[0]
                 job_id = extract_job_id(job_link)
 
-                if job_id in seen_job_ids:
-                    continue
+                if job_id in seen_job_ids: continue
                 seen_job_ids.add(job_id)
 
                 title_elem = card.find("h3", class_="base-search-card__title")
-                title = title_elem.text.strip() if title_elem else "N/A"
+                title = title_elem.text.strip() if title_elem else "غير متوفر"
 
                 company_elem = card.find("h4", class_="base-search-card__subtitle")
-                company = company_elem.text.strip() if company_elem else "N/A"
+                company = company_elem.text.strip() if company_elem else "غير متوفر"
 
                 location_elem = card.find("span", class_="job-search-card__location")
-                loc = location_elem.text.strip() if location_elem else "N/A"
+                loc = location_elem.text.strip() if location_elem else "غير متوفر"
 
                 date_elem = card.find("time")
-                post_date = date_elem["datetime"] if date_elem and date_elem.has_attr("datetime") else (date_elem.text.strip() if date_elem else "N/A")
+                post_date = date_elem["datetime"] if date_elem and date_elem.has_attr("datetime") else (date_elem.text.strip() if date_elem else "غير متوفر")
+
+                detected_wp = detect_workplace_type(None, title, "", loc)
 
                 job_data = {
                     "Job ID": job_id,
@@ -422,9 +359,7 @@ def scrape_linkedin_jobs(keywords, location, pages_per_keyword, sort_option, wor
                     "Company": company,
                     "Location": loc,
                     "Post Date": post_date,
-                    # لو المستخدم فلتر بنوع شغل معين، بنعرضه زي ما هو (اتفلترت الوظايف عليه أصلاً من LinkedIn).
-                    # لو الفلتر "الكل"، هيتحدد النوع الحقيقي تحت لو تم سحب تفاصيل الوظيفة، وإلا هيفضل "غير محدد".
-                    "Workplace": workplace if workplace != "الكل" else "غير محدد",
+                    "Workplace": workplace if workplace != "الكل" else detected_wp,
                     "Job Link": job_link,
                 }
 
@@ -434,7 +369,7 @@ def scrape_linkedin_jobs(keywords, location, pages_per_keyword, sort_option, wor
                     job_data["Job Description"] = job_desc
 
                     if workplace == "الكل":
-                        job_data["Workplace"] = detect_workplace_type(job_soup, title, job_desc)
+                        job_data["Workplace"] = detect_workplace_type(job_soup, title, job_desc, loc)
 
                     if cv_text:
                         job_data["Match Score (%)"] = calculate_match(cv_text, job_desc)
@@ -454,7 +389,7 @@ if submitted:
     keywords = [k.strip() for k in keywords_input.split(",") if k.strip()]
 
     if not keywords:
-        st.error("اكتب اسم وظيفة واحدة على الأقل يا هندسة.")
+        st.error("اكتب اسم وظيفة واحدة على الأقل.")
     else:
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -464,35 +399,38 @@ if submitted:
             status_text.text(message)
 
         with st.spinner("جاري سحب الوظايف..."):
-            jobs = scrape_linkedin_jobs(keywords, location, pages_per_keyword, sort_option, workplace, fetch_full_desc, cv_text, update_progress)
+            jobs = scrape_linkedin_jobs(keywords, location, pages_per_keyword, workplace, time_filter, fetch_full_desc, cv_text, update_progress)
 
         progress_bar.empty()
         status_text.empty()
 
         if not jobs:
-            st.warning("مفيش نتايج! جرب تغير الكلمات أو قلل الفلاتر (أو ممكن تكون LinkedIn حظرت الـ requests مؤقتًا).")
+            st.warning("مفيش نتايج! جرب تغير الكلمات أو قلل الفلاتر.")
             st.session_state.pop("job_results_df", None)
         else:
             df = pd.DataFrame(jobs)
-
-            if sort_option == "الوقت (الأحدث)":
-                df = df.sort_values(by="Post Date", ascending=False).reset_index(drop=True)
-            elif sort_option == "أعلى نسبة تطابق" and "Match Score (%)" in df.columns:
-                df = df.sort_values(by="Match Score (%)", ascending=False).reset_index(drop=True)
-
-            # بنخزن النتايج في session_state عشان تفضل موجودة حتى لو ضغطنا زرار تاني
-            # (زي زرار تحليل التطابق) وحصل rerun للسكريبت
             st.session_state.job_results_df = df
             st.session_state.job_results_keyword = keywords[0]
 
 # ============================================================
-#   عرض النتايج (بره الـ if submitted عشان تفضل ظاهرة بعد أي rerun)
+#   الترتيب والعرض (بره الفورم عشان يشتغل مباشر)
 # ============================================================
 if "job_results_df" in st.session_state:
-    df = st.session_state.job_results_df
+    df = st.session_state.job_results_df.copy()
     safe_keyword = st.session_state.job_results_keyword.lower().replace(" ", "_")
 
     st.success(f"عاش! جبنالك {len(df)} وظيفة.")
+    
+    sort_choices = ["بدون ترتيب", "الوقت (الأحدث)"]
+    if "Match Score (%)" in df.columns:
+        sort_choices.append("أعلى نسبة تطابق")
+        
+    sort_option = st.selectbox("رتب الجدول بناءً على:", sort_choices)
+
+    if sort_option == "الوقت (الأحدث)":
+        df = df.sort_values(by="Post Date", ascending=False).reset_index(drop=True)
+    elif sort_option == "أعلى نسبة تطابق" and "Match Score (%)" in df.columns:
+        df = df.sort_values(by="Match Score (%)", ascending=False).reset_index(drop=True)
 
     df_display = df.drop(columns=["Job ID"], errors='ignore')
 
@@ -501,13 +439,11 @@ if "job_results_df" in st.session_state:
         use_container_width=True,
         column_config={
             "Job Link": st.column_config.LinkColumn(
-                label="تقديم (Apply)",
-                help="اضغط هنا للتقديم على الوظيفة",
-                display_text="قدم الآن (Apply Now)"
+                label="تقديم",
+                display_text="قدم دلوقتي"
             ),
             "Match Score (%)": st.column_config.NumberColumn(
-                label="نسبة التطابق (%)",
-                help="نسبة تطابق تقريبية (TF-IDF + مهارات تقنية) بين الـ CV ووصف الوظيفة",
+                label="التطابق (%)",
                 format="%.2f %%"
             )
         }
@@ -518,7 +454,7 @@ if "job_results_df" in st.session_state:
     with col1:
         csv_data = df.to_csv(index=False).encode('utf-8-sig')
         st.download_button(
-            label="⬇ تحميل كـ CSV",
+            label="⬇ تحميل CSV",
             data=csv_data,
             file_name=f"linkedin_jobs_{safe_keyword}.csv",
             mime="text/csv",
@@ -530,7 +466,7 @@ if "job_results_df" in st.session_state:
             df.to_excel(writer, index=False, sheet_name="Jobs")
 
         st.download_button(
-            label="⬇ تحميل كـ Excel",
+            label="⬇ تحميل Excel",
             data=excel_buffer.getvalue(),
             file_name=f"linkedin_jobs_{safe_keyword}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
