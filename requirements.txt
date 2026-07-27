@@ -1,3 +1,5 @@
 streamlit
-requests
+pandas
+xlsxwriter
 beautifulsoup4
+requests
