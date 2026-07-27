@@ -1,6 +1,5 @@
 import csv
 import io
-import json
 import random
 import string
 import time
@@ -19,12 +18,6 @@ except ImportError:
     GDOWN_AVAILABLE = False
 
 try:
-    import anthropic
-    ANTHROPIC_AVAILABLE = True
-except ImportError:
-    ANTHROPIC_AVAILABLE = False
-
-try:
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.metrics.pairwise import cosine_similarity
     SKLEARN_AVAILABLE = True
@@ -35,13 +28,6 @@ st.set_page_config(page_title="LinkedIn Jobs Scraper", page_icon="💼", layout=
 
 st.title("💼 LinkedIn Jobs Scraper - النسخة الوحش")
 st.write("اكتب اسم الوظيفة، واختار الفلاتر اللي على مزاجك، وارفع الـ CV لو حابب (PDF/Word أو لينك درايف)، ودوس بحث.")
-
-with st.sidebar:
-    st.subheader("🤖 تحليل التطابق بالـ AI (اختياري)")
-    st.caption("عشان تعرف إيه الناقصك بالظبط في كل وظيفة، حط API key بتاعك من Anthropic Console.")
-    anthropic_api_key = st.text_input("Anthropic API Key", type="password", key="anthropic_api_key")
-    if not ANTHROPIC_AVAILABLE:
-        st.warning("مكتبة anthropic مش متثبتة. شغّل: pip install anthropic")
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -193,83 +179,6 @@ def calculate_match(cv_text, job_desc):
 
     final_score = (0.65 * tfidf_score + 0.35 * skill_score) * 100
     return round(min(final_score, 100.0), 2)
-
-# ============================================================
-#   تحليل الفجوة بين الـ CV والوظيفة بالـ AI (اختياري - محتاج API key)
-# ============================================================
-def analyze_match_gap(cv_text, job_desc, api_key):
-    """
-    بيرجع dict فيه 3 أقسام:
-    - missing_tools: أدوات/تكنولوجيز مطلوبة في الوظيفة ومش موجودة في الـ CV خالص
-    - topics_to_study: مواضيع فرعية في أدوات موجودة عندك بس محتاجة تعميق
-    - general_tips: نصايح عامة لزيادة فرصة القبول
-    """
-    if not api_key or not ANTHROPIC_AVAILABLE:
-        return None
-    if not cv_text or not job_desc or job_desc == "N/A":
-        return None
-
-    prompt = f"""أنت مساعد توظيف تقني متخصص في مجال الـ IT/DevOps/Software.
-قارن بين الـ CV ووصف الوظيفة اللي تحت، وحدد بدقة:
-1) missing_tools: أدوات أو تكنولوجيز مطلوبة في الوظيفة بشكل واضح ومش مذكورة في الـ CV خالص.
-2) topics_to_study: مواضيع فرعية داخل أدوات/مهارات موجودة أصلاً في الـ CV، لكن الوظيفة شكلها بتطلب مستوى أعمق فيها (يعني حاجات موجودة بس محتاجة تتراجع/تتعمق).
-3) general_tips: نصايح عملية ومحددة (مش عامة قوي) تزود فرصة قبول الـ CV ده تحديدًا للوظيفة دي.
-
-رجّع إجابتك بصيغة JSON فقط، من غير أي نص إضافي أو Markdown code fences، بالشكل ده بالظبط:
-{{"missing_tools": ["..."], "topics_to_study": ["..."], "general_tips": ["..."]}}
-
-لو مفيش حاجة ناقصة في قسم معين، رجّع array فاضي [] له.
-
---- الـ CV ---
-{cv_text[:4000]}
-
---- وصف الوظيفة ---
-{job_desc[:3000]}
-"""
-
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model="claude-sonnet-5",
-            max_tokens=1200,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw_text = response.content[0].text.strip()
-        raw_text = re.sub(r"^```json\s*|\s*```$", "", raw_text, flags=re.MULTILINE).strip()
-        return json.loads(raw_text)
-    except json.JSONDecodeError:
-        st.error("الـ AI رجّع رد مش بصيغة JSON سليمة، جرب تاني.")
-        return None
-    except Exception as e:
-        st.error(f"حصل خطأ أثناء التحليل: {e}")
-        return None
-
-def render_gap_analysis(analysis):
-    missing = analysis.get("missing_tools", []) or []
-    topics = analysis.get("topics_to_study", []) or []
-    tips = analysis.get("general_tips", []) or []
-
-    st.markdown("**🧩 أدوات/تكنولوجيز ناقصاك خالص:**")
-    if missing:
-        for item in missing:
-            st.markdown(f"- {item}")
-    else:
-        st.markdown("_محدش ناقصك من الأدوات الأساسية، تمام 👍_")
-
-    st.markdown("**📚 مواضيع تحتاج تعمّقها في أدوات عندك أصلاً:**")
-    if topics:
-        for item in topics:
-            st.markdown(f"- {item}")
-    else:
-        st.markdown("_مفيش نقاط ضعف واضحة في المهارات الموجودة عندك._")
-
-    st.markdown("**💡 نصايح لزيادة فرصة القبول:**")
-    if tips:
-        for item in tips:
-            st.markdown(f"- {item}")
-    else:
-        st.markdown("_مفيش ملاحظات إضافية._")
-
 # ============================================================
 #   نموذج الإدخال والفلاتر
 # ============================================================
@@ -492,9 +401,6 @@ def scrape_linkedin_jobs(keywords, location, pages_per_keyword, sort_option, wor
 # ============================================================
 #   تنفيذ البحث
 # ============================================================
-if "gap_analysis_cache" not in st.session_state:
-    st.session_state.gap_analysis_cache = {}
-
 if submitted:
     keywords = [k.strip() for k in keywords_input.split(",") if k.strip()]
 
@@ -529,7 +435,6 @@ if submitted:
             # (زي زرار تحليل التطابق) وحصل rerun للسكريبت
             st.session_state.job_results_df = df
             st.session_state.job_results_keyword = keywords[0]
-            st.session_state.gap_analysis_cache = {}  # نتايج بحث جديدة = كاش قديم مالوش لازمة
 
 # ============================================================
 #   عرض النتايج (بره الـ if submitted عشان تفضل ظاهرة بعد أي rerun)
@@ -581,42 +486,3 @@ if "job_results_df" in st.session_state:
             file_name=f"linkedin_jobs_{safe_keyword}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-
-    # ============================================================
-    #   تحليل التطابق التفصيلي بالـ AI (لو فيه CV ووصف وظيفة و API key)
-    # ============================================================
-    if cv_text and "Job Description" in df.columns:
-        st.divider()
-        st.subheader("🔍 ليه النسبة دي بالظبط؟ (تحليل تفصيلي)")
-        st.write("اختار وظيفة واعرف إيه الناقصك بالظبط عشان تقدّم وانت مطمن.")
-
-        job_labels = [
-            f"{row['Job Title']} - {row['Company']} ({row.get('Match Score (%)', 0)}%)"
-            for _, row in df.iterrows()
-        ]
-        selected_idx = st.selectbox(
-            "اختار الوظيفة",
-            options=range(len(df)),
-            format_func=lambda i: job_labels[i],
-            key="selected_job_for_analysis",
-        )
-
-        analyze_clicked = st.button("🧠 حلل التطابق", key="analyze_gap_btn")
-
-        job_id = df.iloc[selected_idx].get("Job ID", str(selected_idx))
-        cache_key = f"{job_id}"
-
-        if analyze_clicked:
-            if not anthropic_api_key:
-                st.warning("محتاج تحط Anthropic API Key في الشريط الجانبي الأول.")
-            elif cache_key in st.session_state.gap_analysis_cache:
-                pass  # موجود بالفعل، هيتعرض تحت
-            else:
-                job_desc = df.iloc[selected_idx]["Job Description"]
-                with st.spinner("بيحلل الوصف مقابل الـ CV..."):
-                    result = analyze_match_gap(cv_text, job_desc, anthropic_api_key)
-                if result:
-                    st.session_state.gap_analysis_cache[cache_key] = result
-
-        if cache_key in st.session_state.gap_analysis_cache:
-            render_gap_analysis(st.session_state.gap_analysis_cache[cache_key])
