@@ -12,6 +12,12 @@ import docx
 from bs4 import BeautifulSoup
 
 try:
+    import gdown
+    GDOWN_AVAILABLE = True
+except ImportError:
+    GDOWN_AVAILABLE = False
+
+try:
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.metrics.pairwise import cosine_similarity
     SKLEARN_AVAILABLE = True
@@ -65,6 +71,7 @@ def extract_text_from_gdrive(link):
 
     file_id = match.group(1)
 
+    # محاولة 1: الملف Google Doc أصلي (مش رفعت كـ PDF)
     try:
         doc_url = f"https://docs.google.com/document/d/{file_id}/export?format=txt"
         resp = requests.get(doc_url, timeout=10)
@@ -73,12 +80,29 @@ def extract_text_from_gdrive(link):
     except Exception:
         pass
 
+    # محاولة 2: الطريقة الصح لتنزيل ملف مرفوع (PDF/Word) من درايف
+    # uc?export=download المباشر بقى غالبًا بيرجع صفحة تأكيد HTML بدل الملف،
+    # فبنستخدم gdown اللي بيتعامل مع الـ confirm token والـ session تلقائيًا
+    if GDOWN_AVAILABLE:
+        try:
+            tmp_path = f"/tmp/_gdrive_cv_{file_id}"
+            gdown.download(id=file_id, output=tmp_path, quiet=True, fuzzy=True)
+            if tmp_path and pd.io.common.file_exists(tmp_path):
+                with open(tmp_path, "rb") as f:
+                    raw = f.read()
+                if raw[:4] == b"%PDF":
+                    return extract_text_from_pdf(io.BytesIO(raw))
+                elif raw[:2] == b"PK":  # ملف docx (zip signature)
+                    return extract_text_from_docx(io.BytesIO(raw))
+        except Exception:
+            pass
+
+    # محاولة 3 (fallback بدائي لو gdown مش متثبتة أو فشلت)
     try:
         pdf_url = f"https://drive.google.com/uc?export=download&id={file_id}"
         resp = requests.get(pdf_url, timeout=10)
-        if resp.status_code == 200 and resp.headers.get("Content-Type", "").startswith("application/pdf"):
-            pdf_file = io.BytesIO(resp.content)
-            return extract_text_from_pdf(pdf_file)
+        if resp.status_code == 200 and resp.content[:4] == b"%PDF":
+            return extract_text_from_pdf(io.BytesIO(resp.content))
     except Exception:
         pass
 
