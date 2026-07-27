@@ -12,7 +12,6 @@ st.set_page_config(page_title="LinkedIn Jobs Scraper", page_icon="💼", layout=
 st.title("💼 LinkedIn Jobs Scraper")
 st.write("اكتب اسم الوظيفة، واختار الفلاتر اللي على مزاجك، ودوس بحث.")
 
-# قايمة اليوزر إيجنتس عشان نبدل بينهم
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
@@ -30,7 +29,7 @@ with st.form("search_form"):
     col1, col2 = st.columns(2)
     with col1:
         sort_by_newest = st.checkbox("أحدث الوظايف الأول؟")
-        fetch_full_desc = st.checkbox("سحب تفاصيل الوظيفة بالكامل؟ (هياخد وقت أطول)")
+        fetch_full_desc = st.checkbox("سحب تفاصيل الوظيفة بالكامل - Job Description ؟ (هياخد وقت أطول)")
     with col2:
         workplace = st.selectbox("نوع الشغل", ["الكل", "عن بُعد (Remote)", "من الشركة (On-site)", "مختلط (Hybrid)"])
     
@@ -51,13 +50,12 @@ def get_job_description(job_id, headers):
                 return div.get_text(separator="\n", strip=True)
     except Exception:
         pass
-    return "N/A"
+    return "نوع غير معين"
 
 def scrape_linkedin_jobs(keywords, location, pages_per_keyword, sort_by_newest, workplace, fetch_full_desc, progress_callback):
     all_jobs = []
     seen_job_ids = set()
     
-    # تحويل اختيار نوع الشغل للأكواد بتاعت لينكد إن
     wt_map = {"عن بُعد (Remote)": "2", "من الشركة (On-site)": "1", "مختلط (Hybrid)": "3"}
     
     total_steps = len(keywords) * pages_per_keyword
@@ -72,13 +70,11 @@ def scrape_linkedin_jobs(keywords, location, pages_per_keyword, sort_by_newest, 
             start = page * 25
             url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={keyword}&location={location}&start={start}"
             
-            # تطبيق الفلاتر على اللينك
             if sort_by_newest:
                 url += "&sortBy=DD"
             if workplace != "الكل":
                 url += f"&f_WT={wt_map[workplace]}"
             
-            # نظام المحاولة أكتر من مرة لو حصل مشكلة
             max_retries = 3
             job_cards = []
             for attempt in range(max_retries):
@@ -92,7 +88,7 @@ def scrape_linkedin_jobs(keywords, location, pages_per_keyword, sort_by_newest, 
                         soup = BeautifulSoup(response.content, "html.parser")
                         job_cards = soup.find_all("li")
                         if job_cards:
-                            break  # لو جاب داتا يكسر اللوب ويدخل في اللي بعده
+                            break 
                     time.sleep(random.uniform(2.0, 4.0))
                 except Exception:
                     time.sleep(2)
@@ -135,11 +131,10 @@ def scrape_linkedin_jobs(keywords, location, pages_per_keyword, sort_by_newest, 
                     "Job Link": job_link,
                 }
                 
-                # سحب تفاصيل الوظيفة لو انت معلم عليها في الواجهة
                 if fetch_full_desc:
                     desc_headers = {"User-Agent": random.choice(USER_AGENTS)}
                     job_data["Job Description"] = get_job_description(job_id, desc_headers)
-                    time.sleep(random.uniform(0.5, 1.5))  # ريح شوية عشان البلوك
+                    time.sleep(random.uniform(0.5, 1.5))
                     
                 all_jobs.append(job_data)
             
@@ -174,14 +169,26 @@ if submitted:
         else:
             st.success(f"عاش! جبنالك {len(jobs)} وظيفة.")
             
-            # استخدام مكتبة Pandas لعرض وتحميل الداتا
             df = pd.DataFrame(jobs)
-            st.dataframe(df, use_container_width=True)
+            
+            # إخفاء العمود من الجدول المطبوع بس
+            df_display = df.drop(columns=["Job ID"], errors='ignore')
+
+            st.dataframe(
+                df_display, 
+                use_container_width=True,
+                column_config={
+                    "Job Link": st.column_config.LinkColumn(
+                        label="تقديم (Apply)",
+                        help="اضغط هنا للتقديم على الوظيفة على لينكد إن",
+                        display_text="قدم الآن (Apply Now)" 
+                    )
+                }
+            )
 
             col1, col2 = st.columns(2)
             safe_keyword = keywords[0].lower().replace(" ", "_")
             
-            # زرار الـ CSV
             with col1:
                 csv_data = df.to_csv(index=False).encode('utf-8-sig')
                 st.download_button(
@@ -191,7 +198,6 @@ if submitted:
                     mime="text/csv",
                 )
             
-            # زرار الـ Excel
             with col2:
                 excel_buffer = io.BytesIO()
                 with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
