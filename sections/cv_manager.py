@@ -22,9 +22,32 @@ from utils.storage import (
 @st.dialog("👀 معاينة الـ CV", width="large")
 def preview_cv_dialog(filepath):
     with open(filepath, "rb") as f:
-        base64_pdf = base64.b64encode(f.read()).decode('utf-8')
-    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800px" type="application/pdf"></iframe>'
-    st.markdown(pdf_display, unsafe_allow_html=True)
+        pdf_bytes = f.read()
+    base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+    data_uri = f"data:application/pdf;base64,{base64_pdf}"
+
+    # Use object + embed with fallback message for browsers that block data: URIs
+    html_content = f"""
+    <html><body style="margin:0;padding:0;overflow:hidden;">
+    <object data="{data_uri}" type="application/pdf" width="100%" height="780px">
+        <embed src="{data_uri}" type="application/pdf" width="100%" height="780px" />
+        <p style="text-align:center;padding:2rem;font-family:sans-serif;color:#888;">
+            المتصفح مش بيدعم معاينة PDF مباشرة. استخدم زرار التحميل بالأسفل.
+        </p>
+    </object>
+    </body></html>
+    """
+    import streamlit.components.v1 as components
+    components.html(html_content, height=800, scrolling=False)
+
+    # Always provide a download fallback
+    st.download_button(
+        "⬇️ تحميل الـ CV",
+        data=pdf_bytes,
+        file_name=os.path.basename(filepath),
+        mime="application/pdf",
+        use_container_width=True,
+    )
 
 
 def render_cv_manager():
