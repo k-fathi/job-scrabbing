@@ -177,13 +177,25 @@ def calculate_match(cv_text, job_desc):
     return round(min(final_score, 100.0), 2)
 
 def extract_job_id(job_link):
+    match = re.search(r'(\d{8,})', job_link)
+    if match:
+        return match.group(1)
     match = re.search(r'-(\d+)(?:[/?]|$)', job_link)
     if match:
         return match.group(1)
     return job_link.rstrip("/").split("/")[-1]
 
-def detect_workplace_type(soup, title, description, location_text):
-    haystack = f"{title or ''} {(description or '')[:500]} {location_text or ''}".lower()
+def detect_workplace_type(soup, title, description, location_text, card_soup=None):
+    if card_soup:
+        card_text = card_soup.get_text(separator=" ", strip=True).lower()
+        if "remote" in card_text or "عن بعد" in card_text:
+            return "عن بُعد"
+        if "hybrid" in card_text or "مختلط" in card_text:
+            return "مختلط"
+        if "on-site" in card_text or "onsite" in card_text or "من الشركة" in card_text:
+            return "من الشركة"
+
+    haystack = f"{title or ''} {(description or '')[:1000]} {location_text or ''}".lower()
     
     if "remote" in haystack or "عن بعد" in haystack:
         return "عن بُعد"
@@ -207,6 +219,7 @@ def detect_workplace_type(soup, title, description, location_text):
     return "غير محدد"
 
 def get_job_description(job_id, headers):
+    error_msg = None
     try:
         desc_url = f"https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}"
         resp = requests.get(desc_url, headers=headers, timeout=10)
@@ -214,10 +227,12 @@ def get_job_description(job_id, headers):
             soup = BeautifulSoup(resp.content, "html.parser")
             div = soup.find("div", class_="show-more-less-html__markup")
             description = div.get_text(separator="\n", strip=True) if div else "غير متوفر"
-            return description, soup
-    except Exception:
-        pass
-    return "غير متوفر", None
+            return description, soup, None
+        else:
+            error_msg = f"HTTP {resp.status_code}"
+    except Exception as e:
+        error_msg = str(e)
+    return "غير متوفر", None, error_msg
 
 def scrape_linkedin_jobs(
     keywords,
@@ -231,6 +246,8 @@ def scrape_linkedin_jobs(
 ):
     all_jobs = []
     seen_job_ids = set()
+    failed_pages = 0
+    errors_log = []
 
     wt_map = {"عن بُعد": "2", "من الشركة": "1", "مختلط": "3"}
     time_map = {"آخر ٢٤ ساعة": "r86400", "آخر أسبوع": "r604800", "آخر شهر": "r2592000"}
@@ -255,13 +272,14 @@ def scrape_linkedin_jobs(
             }
             
             if time_filter != "أي وقت":
-                params["f_TPR"] = time_map[time_filter]
+                params["f_TPR"] = time_map.get(time_filter, "")
                 
             if workplace != "الكل":
                 params["f_WT"] = wt_map.get(workplace, "")
 
             max_retries = 3
             job_cards = []
+            last_error = None
             for attempt in range(max_retries):
                 headers = {
                     "User-Agent": random.choice(USER_AGENTS),
@@ -274,14 +292,21 @@ def scrape_linkedin_jobs(
                         job_cards = soup.find_all("li")
                         if job_cards: break
                     elif response.status_code == 429:
+                        last_error = "Rate limited (429)"
                         time.sleep((2 ** attempt) + random.uniform(1, 2))
                         continue
+                    else:
+                        last_error = f"HTTP {response.status_code}"
                     time.sleep(random.uniform(2.0, 4.0))
-                except Exception:
+                except Exception as e:
+                    last_error = str(e)
                     time.sleep(2 * (attempt + 1))
 
             if not job_cards:
-                break
+                failed_pages += 1
+                if last_error:
+                    errors_log.append(f"صفحة {page+1} لـ '{keyword}': {last_error}")
+                continue
 
             for card in job_cards:
                 link_elem = card.find("a", class_="base-card__full-link")
@@ -305,7 +330,7 @@ def scrape_linkedin_jobs(
                 date_elem = card.find("time")
                 post_date = date_elem["datetime"] if date_elem and date_elem.has_attr("datetime") else (date_elem.text.strip() if date_elem else "غير متوفر")
 
-                detected_wp = detect_workplace_type(None, title, "", loc)
+                detected_wp = detect_workplace_type(None, title, "", loc, card_soup=card)
 
                 job_data = {
                     "Job ID": job_id,
@@ -320,11 +345,11 @@ def scrape_linkedin_jobs(
 
                 if force_fetch_desc:
                     desc_headers = {"User-Agent": random.choice(USER_AGENTS)}
-                    job_desc, job_soup = get_job_description(job_id, desc_headers)
+                    job_desc, job_soup, desc_err = get_job_description(job_id, desc_headers)
                     job_data["Job Description"] = job_desc
 
                     if workplace == "الكل":
-                        job_data["Workplace"] = detect_workplace_type(job_soup, title, job_desc, loc)
+                        job_data["Workplace"] = detect_workplace_type(job_soup, title, job_desc, loc, card_soup=card)
 
                     if cv_text:
                         job_data["Match Score (%)"] = calculate_match(cv_text, job_desc)
@@ -335,4 +360,9 @@ def scrape_linkedin_jobs(
 
             time.sleep(random.uniform(1.5, 3.0))
 
-    return all_jobs
+    stats = {
+        "total_steps": total_steps,
+        "failed_pages": failed_pages,
+        "errors": errors_log
+    }
+    return all_jobs, stats

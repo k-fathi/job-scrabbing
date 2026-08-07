@@ -100,7 +100,7 @@ def render_job_search():
             status_text.text(message)
 
         with st.spinner("جاري سحب الوظايف..."):
-            jobs = scrape_linkedin_jobs(
+            jobs, stats = scrape_linkedin_jobs(
                 keywords,
                 location,
                 pages_per_keyword,
@@ -113,6 +113,12 @@ def render_job_search():
 
         progress_bar.empty()
         status_text.empty()
+
+        if stats.get("failed_pages", 0) > 0:
+            st.warning(f"⚠️ تم سحب {len(jobs)} وظيفة، لكن فيه {stats['failed_pages']} صفحة/طلب فشلوا (أقرب لـ rate-limit أو خطأ شبكة).")
+            with st.expander("تفاصيل الأخطاء (أثنا السحب)"):
+                for err in stats.get("errors", []):
+                    st.write(f"- {err}")
 
         if not jobs:
             st.warning("مفيش نتايج! جرب تغير الكلمات أو قلل الفلاتر.")
@@ -130,14 +136,20 @@ def render_job_search():
 
     df = pd.DataFrame(jobs)
     
-    sort_choices = ["بدون ترتيب", "الوقت (الأحدث)"]
+    sort_choices = ["بدون ترتيب", "الأحدث أولاً", "الأقدم أولاً", "الاسم (أ-ي)", "الشركة (أ-ي)"]
     if "Match Score (%)" in df.columns:
         sort_choices.append("أعلى نسبة تطابق")
         
     sort_option = st.selectbox("رتب الجدول بناءً على:", sort_choices)
 
-    if sort_option == "الوقت (الأحدث)":
+    if sort_option in ["الأحدث أولاً", "الوقت (الأحدث)"]:
         df = df.sort_values(by="Post Date", ascending=False).reset_index(drop=True)
+    elif sort_option == "الأقدم أولاً":
+        df = df.sort_values(by="Post Date", ascending=True).reset_index(drop=True)
+    elif sort_option == "الاسم (أ-ي)":
+        df = df.sort_values(by="Job Title", ascending=True).reset_index(drop=True)
+    elif sort_option == "الشركة (أ-ي)":
+        df = df.sort_values(by="Company", ascending=True).reset_index(drop=True)
     elif sort_option == "أعلى نسبة تطابق" and "Match Score (%)" in df.columns:
         df = df.sort_values(by="Match Score (%)", ascending=False).reset_index(drop=True)
 

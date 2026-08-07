@@ -343,25 +343,25 @@ def render_analytics():
         st.markdown("#### 🗓️ نشاط التقديم (يوم × أسبوع)")
         if dated_apps:
             day_names = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
-            # Build week-number × day-of-week matrix
+            # Build (year, week) × day-of-week matrix
             week_day = {}
             for a in dated_apps:
                 d = _parse_date(a["applied_date"])
                 if d:
-                    wk = d.isocalendar()[1]
+                    iso_year, iso_week, _ = d.isocalendar()
                     dow = d.weekday()  # 0=Mon
-                    week_day.setdefault(wk, Counter())[dow] += 1
+                    week_day.setdefault((iso_year, iso_week), Counter())[dow] += 1
 
-            weeks = sorted(week_day.keys())
+            sorted_weeks = sorted(week_day.keys())
             z_matrix = []
             for dow in range(7):
-                row = [week_day.get(wk, {}).get(dow, 0) for wk in weeks]
+                row = [week_day.get(wk, {}).get(dow, 0) for wk in sorted_weeks]
                 z_matrix.append(row)
 
             fig = go.Figure(
                 data=go.Heatmap(
                     z=z_matrix,
-                    x=[f"W{w}" for w in weeks],
+                    x=[f"{w[0]}-W{w[1]}" for w in sorted_weeks],
                     y=day_names,
                     colorscale=[[0, "#f5f5f5"], [1, "#667eea"]],
                     showscale=False,
