@@ -146,9 +146,14 @@ st.markdown(
     }
 
     /* ── Hide Streamlit branding ─────────────────────────── */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
+    #MainMenu {display: none;}
+    footer {display: none;}
+    header {display: none;}
+
+    /* ── Remove top padding gap ──────────────────────────── */
+    .main .block-container {
+        padding-top: 1rem;
+    }
 
     /* ── Smooth scrolling ────────────────────────────────── */
     html {
