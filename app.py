@@ -29,10 +29,66 @@ st.markdown(
     """
     <style>
     /* ── Import font ─────────────────────────────────────── */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Noto+Sans+Arabic:wght@400;600;700;800&display=swap');
 
     html, body, [class*="st-"] {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Noto Sans Arabic', 'Inter', sans-serif;
+    }
+
+    /* ── RTL direction for the whole app ─────────────────── */
+    .main .block-container,
+    section[data-testid="stSidebar"] .block-container,
+    section[data-testid="stSidebar"] > div {
+        direction: rtl;
+        text-align: right;
+    }
+
+    /* Keep specific elements LTR (English data, code, links) */
+    code, pre, .stCodeBlock,
+    input[type="text"], input[type="email"], input[type="password"],
+    textarea,
+    .stDataFrame, .stTable,
+    a[href] {
+        direction: ltr;
+        unicode-bidi: isolate;
+    }
+
+    /* Tabs should flow RTL */
+    [data-testid="stTabs"] [role="tablist"] {
+        direction: rtl;
+    }
+
+    /* Fix text inputs to still be LTR internally but RTL label */
+    [data-testid="stTextInput"] label,
+    [data-testid="stSelectbox"] label,
+    [data-testid="stMultiSelect"] label,
+    [data-testid="stDateInput"] label,
+    [data-testid="stSlider"] label,
+    [data-testid="stFileUploader"] label,
+    [data-testid="stCheckbox"] label,
+    [data-testid="stRadio"] label,
+    .stForm label {
+        direction: rtl;
+        text-align: right;
+    }
+
+    /* Metric values should stay LTR (numbers) */
+    [data-testid="stMetricValue"] {
+        direction: ltr;
+        unicode-bidi: isolate;
+    }
+
+    /* Expander headers RTL */
+    .streamlit-expanderHeader {
+        direction: rtl;
+        text-align: right;
+    }
+
+    /* Toast and alerts RTL */
+    [data-testid="stToast"],
+    .stAlert {
+        direction: rtl;
+        text-align: right;
     }
     
     /* Fix for Streamlit icons rendering as text */
@@ -49,11 +105,13 @@ st.markdown(
         font-size: 2.2rem;
         font-weight: 800;
         margin-bottom: 0.2rem;
+        direction: rtl;
     }
     .main-subtitle {
         color: #999;
         font-size: 0.95rem;
         margin-bottom: 1.5rem;
+        direction: rtl;
     }
 
     /* ── Expander styling ────────────────────────────────── */
